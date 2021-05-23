@@ -17,6 +17,7 @@ string recordTisStr[] = { "sequence", "hash", "heap" };
 
 class Attribute {
 public:
+	string relaName; // 属性所属关系的名字
 	string attriName; // 属性的名，唯一标识符
 	Type attriType; // 属性的类型
 	int attriSize; // 属性的长度
@@ -24,7 +25,8 @@ public:
 	bool attriIsEmpty; // 属性是否可以为空
 	// 默认值
 	Attribute(){}
-	Attribute(string attriName, Type attriType, int attriSize, bool attriIsStable, bool attriIsEmpty) {
+	Attribute(string relaName, string attriName, Type attriType, int attriSize, bool attriIsStable, bool attriIsEmpty) {
+		this->relaName = relaName;
 		this->attriName = attriName;
 		this->attriType = attriType;
 		this->attriSize = attriSize;
@@ -38,6 +40,8 @@ public:
 
 };
 
+map<string, map<string, Attribute>> attriMap; // <关系名，<属性名，属性>>
+
 class Metadata {
 public:
 	string databaseName; // 关系所属数据库名
@@ -49,20 +53,17 @@ public:
 	RecordWay relaStore; // 关系的存储方法
 	RecordTis relaTissue; // 关系的存储组织
 	string relaLocation; // 关系的存储位置
-	// 关系的索引
-	map<string, Attribute> attriMap; // 关系中的所有属性
+	//map<string, Attribute> attriMap; // 关系中的所有属性
 	string createTime; // 关系的创建时间
 	string updateTime; // 关系的最近修改时间
-	// 关系的授权用户信息
+
 
 	Metadata() {
 		this->foreignKeyName = map<string, long>();
-		this->attriMap = map<string, Attribute>();
 	}
 	~Metadata() {}
 	Metadata(string databaseName, long ID, string relaName, string primerayKeyName, map<string, long>& foreignKeyName,
-		long int recordNum, RecordWay relaStore, RecordTis relaTissue, string relaLocation, map<string, Attribute>& attriMap,
-		string createTime, string updateTime) {
+		RecordWay relaStore, RecordTis relaTissue, string relaLocation, string createTime, string updateTime) {
 		this->databaseName = databaseName;
 		this->ID = ID;
 		this->relaName = relaName;
@@ -75,10 +76,6 @@ public:
 		this->relaStore = relaStore;
 		this->relaTissue = relaTissue;
 		this->relaLocation = relaLocation;
-		this->attriMap.clear();
-		for (auto i = attriMap.begin(); i != attriMap.end(); ++i) {
-			this->attriMap.insert(*i);
-		}
 		this->createTime = createTime;
 		this->updateTime = updateTime;
 	}
@@ -106,26 +103,35 @@ public:
 	}
 
 	Attribute& searchAttribute(string attriName) {
-		if (attriMap.find(attriName) != attriMap.end()) {
-		return attriMap[attriName];
+		map<string, Attribute>& tempMap = attriMap[this->relaName];
+		if (tempMap.find(attriName) != tempMap.end()) {
+			return tempMap[attriName];
 		}
 		else cout << "不存在该属性!" << endl;
 	}
 
 	// 增加属性时
 	void insertAttribute(Attribute newAttribute, string updateTime) {
-		if (this->attriMap.find(newAttribute.attriName) == this->attriMap.end()) {
-			cout << "添加新属性：" << newAttribute.attriName << endl;
+		if (newAttribute.relaName != this->relaName) {
+			cout << "该属性不在此关系中";
+			return;
+		}
+		if (attriMap.find(this->relaName) == attriMap.end()) attriMap[this->relaName] = map<string, Attribute>();
+		map<string, Attribute>& tempMap = attriMap[this->relaName];
+
+		if (tempMap.find(newAttribute.attriName) == tempMap.end()) {
+			cout << "关系表" << this->relaName << "添加新属性：" << newAttribute.attriName << endl;
 			this->updateTime = updateTime;
-			this->attriMap.insert({ newAttribute.attriName, newAttribute });
+			tempMap.insert({ newAttribute.attriName, newAttribute });
 		}
 		else cout << "已经存在该属性" << endl;
 	}
 
 	// 修改属性时
 	void updateAttribute(Attribute attributeAfterModify, string updateTime) {
-		if (attriMap.find(attributeAfterModify.attriName) != attriMap.end()) {
-		attriMap.insert({ attributeAfterModify.attriName, attributeAfterModify });
+		map<string, Attribute>& tempMap = attriMap[this->relaName];
+		if (tempMap.find(attributeAfterModify.attriName) != tempMap.end()) {
+			tempMap.insert({ attributeAfterModify.attriName, attributeAfterModify });
 		this->updateTime = updateTime;
 		}
 		else cout << "不存在该属性，无法修改" << endl;
@@ -133,9 +139,10 @@ public:
 
 	// 删除属性时
 	void deleteAttribute(string attriName, string updateTime) {
-		if (attriMap.find(attriName) != attriMap.end()) {
+		map<string, Attribute>& tempMap = attriMap[this->relaName];
+		if (tempMap.find(attriName) != tempMap.end()) {
 			cout << "删除属性" << attriName << endl;
-			attriMap.erase(attriName);
+			tempMap.erase(attriName);
 		}
 		else cout << "不存在该属性，无需删除" << endl;
 	}
@@ -154,11 +161,13 @@ public:
 		cout << "关系最近修改时间：" << metadata.updateTime;
 		cout << "\n关系中的属性：" << endl;
 
+		map<string, Attribute>& tempMap = attriMap[metadata.relaName];
+
 		cout << "属性名\t" << "类型\t" << "长度\t" << "定长\t" << "为空\t" << endl;
-		auto primaryKey = metadata.attriMap[metadata.primerayKeyName];
+		auto primaryKey = tempMap[metadata.primerayKeyName];
 		cout << primaryKey.attriName << "\t" << typeStr[primaryKey.attriType] << "\t" << primaryKey.attriSize << "\t"
 			<< primaryKey.attriIsStable << "\t" << primaryKey.attriIsEmpty << endl;
-		for (auto i = metadata.attriMap.begin(); i != metadata.attriMap.end(); ++i) {
+		for (auto i = tempMap.begin(); i != tempMap.end(); ++i) {
 			if((*i).second.attriName != primaryKey.attriName)
 				cout << (*i).first << "\t" << (*i).second.attriType << "\t" << (*i).second.attriSize << "\t" 
 				<< (*i).second.attriIsStable << "\t" << (*i).second.attriIsEmpty << endl;
@@ -169,33 +178,29 @@ public:
 	}
 };
 
-map<long, Metadata> allMetaData;
-
-void insertAttribute(long ID, Attribute newAttribute, string updateTime) {
-	allMetaData[ID].insertAttribute(newAttribute, updateTime);
-}
-
-void deleteAttribute(long ID, string attriName, string updateTime) {
-	allMetaData[ID].deleteAttribute(attriName, updateTime);
-}
+map<long, Metadata> allMetaData; 
 
 int main() {
-	Attribute a1("name", Type::STRING, 16, false, true);
-	Attribute a2("age", Type::INT, 16, false, true);
-	Attribute a3("gender", Type::CHAR, 8, true, true);
-	Attribute a4("salary", Type::FLOAT, 32, false, true);
-	map<string, Attribute> attriMap1, attriMap2;
-	attriMap1.insert({ a1.attriName, a1 }); attriMap1.insert({ a2.attriName, a2 }); attriMap1.insert({ a3.attriName, a3 });
-	attriMap2.insert({ a1.attriName, a1 }); attriMap2.insert({ a2.attriName, a2 }); attriMap2.insert({ a4.attriName, a4 });
-
+	Attribute a1("gnederStatistic","name", Type::STRING, 16, false, false);
+	Attribute a2("gnederStatistic","age", Type::INT, 16, false, true);
+	Attribute a3("salaryStatistic", "ID", Type::INT, 16, true, false);
+	Attribute a4("salaryStatistic","gender", Type::CHAR, 8, true, true);
+	Attribute a5("salaryStatistic","salary", Type::FLOAT, 32, false, true);
 
 	map<string, long> foreignMap1, foreignMap2;
 	time_t now = time(0);
 	string dt = ctime(&now);
-	//string databaseName, long ID, string relaName, string primerayKeyName, map<string, long>& foreignKeyName, long int recordNum, RecordWay relaStore, RecordTis relaTissue, string relaLocation, map<string, Attribute>& attriMap, tm createTime, tm updateTime
-	Metadata r1("myDataBase", 0001, "gnederStatistic", "name", foreignMap1, attriMap1.size(), RecordWay::cluster, RecordTis::hash, "localhost", attriMap1, dt, dt);
-	Metadata r2("myDataBase", 0002, "salaryStatistic", "name", foreignMap2, attriMap2.size(), RecordWay::noneCluster, RecordTis::heap, "localhost", attriMap2, dt, dt);
+	//string databaseName, long ID, string relaName, string primerayKeyName, map<string, long>& foreignKeyName,long int recordNum, RecordWay relaStore, RecordTis relaTissue, string relaLocation, string createTime, string updateTime
+	Metadata r1("myDataBase", 0001, "gnederStatistic", "name", foreignMap1, RecordWay::cluster, RecordTis::hash, "localhost", dt, dt);
+	Metadata r2("myDataBase", 0002, "salaryStatistic", "ID", foreignMap2, RecordWay::noneCluster, RecordTis::heap, "localhost", dt, dt);
 	allMetaData.insert({ r1.ID, r1 }); allMetaData.insert({ r2.ID, r2 });
+
+	// 插入数据
+	allMetaData[0001].insertAttribute(a1, dt);
+	allMetaData[0001].insertAttribute(a2, dt);
+
+	allMetaData[0002].insertAttribute(a3, dt);
+	allMetaData[0002].insertAttribute(a4, dt);
 
 	cout << "打印数据库中所有元数据:" << endl;
 	for (auto i = allMetaData.begin(); i != allMetaData.end(); ++i)
@@ -203,16 +208,16 @@ int main() {
 
 	_sleep(1 * 1000);
 
-	insertAttribute(r1.ID, a4, dt);
+	allMetaData[0002].insertAttribute(a5, dt);
 	//r1.deleteAttribute(a2.attriName, dt);
 	
-	cout << endl << "往gnederStatistic中增加salary属性后：" << endl;
-	cout << allMetaData[r1.ID] << endl;;
+	cout << endl << "往salaryStatistic中增加salary属性后：" << endl;
+	cout << allMetaData[0002] << endl;;
 
 
-	deleteAttribute(r1.ID, a2.attriName, dt);
-	cout << endl << "往gnederStatistic中删除age属性后：" << endl;
-	cout << allMetaData[r1.ID] << endl;;
+	allMetaData[0002].deleteAttribute(a4.attriName, dt);
+	cout << endl << "往salaryStatistic中删除gender属性后：" << endl;
+	cout << allMetaData[0002] << endl;;
 }
 
 
